@@ -1,0 +1,33 @@
+# ArtisanCAM configuration. All lengths in millimetres, feeds in mm/min.
+#
+# Coordinate convention: the origin is the TOP-LEFT corner of the stock, seen from
+# above. The engraving lies to the right of and below the origin, so in the G-code
+# X is >= 0 and Y is <= 0. Z = 0 is the top of the stock.
+
+[stock]
+width  = 37.25    # X size of the FLF cover
+length = 63.0     # Y size
+
+[text]
+height       = 3.5    # capital-letter height
+top_margin   = 4.0    # distance from the top edge to the top of capital letters
+letter_gap   = 460    # gap between the ink of neighbouring letters, in font units (capital height = 900)
+space_width  = 380    # extra gap for each space character, same units
+edge_margin  = 1.0    # engraving must stay at least this far from every stock edge
+
+[engraving]
+depth = 0.2           # cutting depth below the stock top (60 degree V-bit)
+
+[heights]             # all measured above the stock top (Fusion "from Model top")
+clearance = 10.0      # start and end of the program
+retract   = 5.0       # travel between strokes
+feed      = 5.0       # plunge starts here (if lower than retract, it rapids down to it first)
+
+[feeds]
+cutting = 1600        # engraving moves
+plunge  = 333.3       # Z move down into the material
+retract = 700         # Z move back up out of the material
+
+[spindle]
+percent  = 100        # M3 P<percent>; Snapmaker accepts 50 < percent <= 100
+warmup_s = 2          # G4 dwell after spindle start

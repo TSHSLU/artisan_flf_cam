@@ -1,0 +1,60 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Virtual environments ---
+.venv/
+venv/
+env/
+.venv*/
+
+# --- Tooling caches ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+.tox/
+
+# --- PyInstaller ---
+*.spec
+*.manifest
+
+# --- Editors / IDE ---
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# --- OS ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# --- Qt ---
+*.qmlc
+*.jsc
+qt.conf
+
+# --- Project output: generated machine code is never committed ---
+out/
+output/
+*.cnc
+*.nc
+*.gcode
+!tests/**/golden/*.cnc
+
+# --- Local scratch ---
+scratch/
+tmp/
+*.log
