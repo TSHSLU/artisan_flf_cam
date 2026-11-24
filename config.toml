@@ -3,17 +3,47 @@
 # Coordinate convention: the origin is the TOP-LEFT corner of the stock, seen from
 # above. The engraving lies to the right of and below the origin, so in the G-code
 # X is >= 0 and Y is <= 0. Z = 0 is the top of the stock.
+#
+# In this file, positions on the stock (keep-out zones) are measured the way you read
+# a drawing: x to the right and y DOWNWARD from the top-left corner.
 
 [stock]
 width  = 37.25    # X size of the FLF cover
 length = 63.0     # Y size
 
-[text]
-height       = 3.5    # capital-letter height
-top_margin   = 4.0    # distance from the top edge to the top of capital letters
-letter_gap   = 460    # gap between the ink of neighbouring letters, in font units (capital height = 900)
-space_width  = 380    # extra gap for each space character, same units
-edge_margin  = 1.0    # engraving must stay at least this far from every stock edge
+[text]               # shared by the top and the bottom line
+letter_gap        = 460    # gap between the ink of neighbouring letters, in font units (capital height = 900)
+space_width       = 380    # extra gap for each space character, same units
+edge_margin       = 1.0    # engraving must stay at least this far from every stock edge
+keepout_clearance = 1.0    # engraving must stay at least this far from every keep-out zone
+
+[text_top]
+height = 3.5      # capital-letter height
+margin = 4.0      # from the top edge down to the top of the capital letters
+
+[text_bottom]
+height = 3.5      # capital-letter height
+margin = 4.0      # from the bottom edge up to the baseline of the capital letters
+
+# Keep-out zones: areas the text must not touch (screw holes, the D-cut, a clamp). The
+# machine does not cut them; this only stops the program from engraving into them.
+# Add one [[keepout]] block per zone. NONE ARE DEFINED YET: until you add them, the
+# text is NOT checked against the holes.
+#
+# [[keepout]]
+# name   = "D-cut"
+# shape  = "rect"       # x, y = top-left corner of the zone
+# x      = 10.0
+# y      = 30.0
+# width  = 17.0
+# height = 12.0
+#
+# [[keepout]]
+# name     = "Screw hole 1"
+# shape    = "circle"   # x, y = centre of the hole
+# x        = 4.0
+# y        = 4.0
+# diameter = 3.2
 
 [engraving]
 depth = 0.2           # cutting depth below the stock top (60 degree V-bit)

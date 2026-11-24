@@ -17,7 +17,7 @@ def bounds(strokes):
 def test_capital_letters_have_the_configured_height(settings):
     _, _, top, bottom = bounds(layout_text("HDMI", FONT, settings))
     assert top == pytest.approx(settings.top_margin)
-    assert bottom - top == pytest.approx(settings.text_height)
+    assert bottom - top == pytest.approx(settings.top_height)
 
 
 def test_text_is_centred_on_the_stock(settings):
@@ -30,7 +30,7 @@ def test_matches_the_fusion_reference_proportions(settings):
     # The program that ran on the machine engraved "HDMI OUT" (its 10 strokes contain no hyphen)
     # at 3.51 mm capital height and spans X 6.106..30.520 (24.414 mm). Letters and the space
     # follow the same proportional spacing; the remaining 0.08 mm comes from the narrow "I".
-    s = dataclasses.replace(settings, text_height=3.51)
+    s = dataclasses.replace(settings, top_height=3.51)
     left, right, top, bottom = bounds(layout_text("HDMI OUT", FONT, s))
     assert right - left == pytest.approx(24.414, abs=0.1)
     assert bottom - top == pytest.approx(3.51, abs=0.001)
@@ -41,11 +41,11 @@ def test_spacing_is_proportional(settings):
         left, right, _, _ = bounds(layout_text(text, FONT, settings))
         return right - left
 
-    gap = settings.letter_gap * settings.text_height / FONT.cap_height
+    gap = settings.letter_gap * settings.top_height / FONT.cap_height
     # "II" is two zero-width strokes separated by exactly one letter gap, no matter how narrow the glyph.
     assert width("II") == pytest.approx(gap)
     # Each space adds space_width on top of the normal gap.
-    extra = settings.space_width * settings.text_height / FONT.cap_height
+    extra = settings.space_width * settings.top_height / FONT.cap_height
     assert width("I I") - width("II") == pytest.approx(extra)
     assert width("I  I") - width("I I") == pytest.approx(extra)
 

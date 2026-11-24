@@ -121,7 +121,7 @@ def test_the_reference_program_passes_the_checker(settings):
 @pytest.mark.skipif(not REFERENCE.exists(), reason="reference/HDMI_OUT_v4.cnc not present")
 def test_stroke_count_and_geometry_match_the_reference(settings):
     ref = REFERENCE.read_text().splitlines()
-    s = dataclasses.replace(settings, text_height=3.51, top_margin=4.067)
+    s = dataclasses.replace(settings, top_height=3.51, top_margin=4.067)
     ours = create_program("HDMI OUT", s).split("\n")  # the reference contains no hyphen stroke
 
     def plunges(lines):

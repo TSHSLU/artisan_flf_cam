@@ -46,3 +46,81 @@ def test_enter_key_creates_the_program(window):
     window.text_input.setText("Öl")
     window.text_input.returnPressed.emit()
     assert window.save_button.isEnabled()
+
+
+def test_bottom_text_alone_creates_a_program(window, settings):
+    window.bottom_input.setText("HDMI IN")
+    window.create_button.click()
+    assert window.save_button.isEnabled()
+    assert "HDMI IN" in window.status.text()
+    ys = [float(t.split("Y")[1].split()[0]) for t in window.output.toPlainText().splitlines() if t.startswith("G1")]
+    assert ys and max(ys) < -settings.stock_length / 2  # everything lies in the lower half: only the bottom line
+
+
+def test_both_texts_are_used(window, settings):
+    window.text_input.setText("HDMI")
+    window.bottom_input.setText("HDMI")
+    window.create_button.click()
+    ys = [float(t.split("Y")[1].split()[0]) for t in window.output.toPlainText().splitlines() if t.startswith("G1")]
+    assert max(ys) > -10 and min(ys) < -settings.stock_length + 10
+
+
+def test_both_fields_empty_shows_an_error(window):
+    window.create_button.click()
+    assert window.status.text().startswith("Error:")
+    assert not window.save_button.isEnabled()
+
+
+def test_editing_the_bottom_text_invalidates_the_shown_program(window):
+    window.text_input.setText("A")
+    window.create_button.click()
+    assert window.save_button.isEnabled()
+    window.bottom_input.setText("B")
+    assert not window.save_button.isEnabled()
+
+
+def test_error_names_the_bottom_line(window):
+    window.text_input.setText("HDMI")
+    window.bottom_input.setText("HDMI-OUT HDMI-OUT")
+    window.create_button.click()
+    assert "Bottom text" in window.status.text()
+
+
+# --- G-code and preview side by side ------------------------------------------------------------------
+
+
+def test_preview_shows_the_created_program(window):
+    window.text_input.setText("HDMI OUT")
+    window.create_button.click()
+    assert window.preview.drawn_cut_moves > 0
+    assert not window.preview.stale
+    assert "strokes" in window.status.text() and "mm engraved" in window.status.text()
+
+
+def test_an_error_clears_the_preview(window):
+    window.text_input.setText("HDMI")
+    window.create_button.click()
+    assert window.preview.drawn_cut_moves > 0
+    window.text_input.setText("HDMI-OUT HDMI-OUT")
+    window.create_button.click()
+    assert window.preview.drawn_cut_moves == 0
+
+
+def test_editing_the_text_fades_the_preview(window):
+    window.text_input.setText("A")
+    window.create_button.click()
+    window.text_input.setText("AB")
+    assert window.preview.stale
+    window.create_button.click()
+    assert not window.preview.stale
+
+
+def test_gcode_and_preview_are_side_by_side(app, window):
+    from PySide6.QtCore import QPoint
+
+    window.show()
+    app.processEvents()
+    gcode_left = window.output.mapTo(window, QPoint(0, 0))
+    preview_left = window.preview.mapTo(window, QPoint(0, 0))
+    assert gcode_left.x() + window.output.width() <= preview_left.x() + 2  # preview starts right of the G-code
+    assert abs(window.output.height() - window.preview.height()) < 80  # similar height: next to each other
