@@ -21,14 +21,15 @@ review the G-code, **Save as…** to write a `.cnc` file.
 
 Everything machine- or job-specific is in [config.toml](config.toml): stock size, engraving
 depth, height and placement of the top and bottom line, heights, feeds, spindle percent, and
-the keep-out zones. Origin is the top-left
+the cut-outs. Origin is the top-left
 corner of the stock, Z = 0 is the top of the stock. Bad values fail with a message naming the key.
 
-**Keep-out zones** (screw holes, the D-cut, a clamp) are `[[keepout]]` blocks in `config.toml`, as
-rectangles or circles measured from the top-left corner (x right, y down). The program refuses to
-engrave text that comes closer than `keepout_clearance` to a zone and names the zone in the error.
-They only protect the engraving; nothing is machined there. **None are defined yet**, so until you
-add them the text is not checked against the holes.
+**Cut-outs** (the D hole and screw holes of a cover version) are `[[cutout]]` blocks in
+`config.toml`: circles, rectangles or D shapes, measured from the top-left corner (x right, y down).
+They are cut by a separate program; here they are only drawn in red on the preview, and a dropdown
+in the window chooses which version (for example `1xD`) is shown. They never block the text or
+change the G-code. Versions 1xD and 2xD currently use assumed numbers (see the comments in the file) until
+they are checked against the Fusion cut-out programs.
 
 ## Test
 
@@ -48,7 +49,7 @@ config.toml                 all job/machine values
 src/artisancam/
   config.py                 load + validate config.toml
   font.py                   bundled stroke font -> strokes (arcs flattened)
-  layout.py                 strokes -> millimetres, top/bottom line, fit and keep-out checks
+  layout.py                 strokes -> millimetres, top/bottom line, edge-margin check
   toolpath.py               strokes -> ordered cuts
   gcode.py                  cuts -> G-code (machine dialect and origin live here)
   ui/window.py              the single window

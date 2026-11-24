@@ -124,3 +124,38 @@ def test_gcode_and_preview_are_side_by_side(app, window):
     preview_left = window.preview.mapTo(window, QPoint(0, 0))
     assert gcode_left.x() + window.output.width() <= preview_left.x() + 2  # preview starts right of the G-code
     assert abs(window.output.height() - window.preview.height()) < 80  # similar height: next to each other
+
+
+# --- cut-out dropdown (display only) -----------------------------------------------------------------
+
+
+def test_dropdown_lists_the_config_versions_and_a_no_cutouts_entry(window, settings):
+    items = [window.cutout_select.itemText(i) for i in range(window.cutout_select.count())]
+    assert items == [*settings.cutout_versions, "No cut-outs"]
+    assert window.preview.cutout_version == settings.cutout_versions[0]  # the first version is shown at start
+
+
+def test_choosing_no_cutouts_hides_the_red_shapes_and_back(window, settings):
+    window.cutout_select.setCurrentIndex(window.cutout_select.count() - 1)
+    assert window.preview.cutout_version is None and window.preview.drawn_cutouts == 0
+    window.cutout_select.setCurrentIndex(0)
+    assert window.preview.cutout_version == settings.cutout_versions[0]
+    assert window.preview.drawn_cutouts == sum(1 for c in settings.cutouts if c.version == settings.cutout_versions[0])
+
+
+def test_choosing_2xd_draws_two_holes_and_not_the_1xd_shapes(window, settings):
+    window.cutout_select.setCurrentText("2xD")
+    assert window.preview.cutout_version == "2xD"
+    assert window.preview.drawn_cutouts == 2  # two D holes, no screw holes
+    window.cutout_select.setCurrentText("1xD")
+    assert window.preview.drawn_cutouts == 3  # D hole + two screw holes
+
+
+def test_the_dropdown_never_changes_the_gcode(window):
+    window.text_input.setText("HDMI OUT")
+    window.create_button.click()
+    before = window.output.toPlainText()
+    window.cutout_select.setCurrentIndex(window.cutout_select.count() - 1)
+    assert window.output.toPlainText() == before
+    assert window.save_button.isEnabled()  # the program is still valid and saveable
+    assert not window.preview.stale

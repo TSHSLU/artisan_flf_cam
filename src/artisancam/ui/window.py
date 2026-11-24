@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtWidgets import (
     QFileDialog,
+    QComboBox,
     QFormLayout,
     QLabel,
     QLineEdit,
@@ -52,7 +53,11 @@ class MainWindow(QWidget):
         self.output.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
         self.output.setPlaceholderText("The G-code appears here.")
         self.preview = PreviewView(settings)
-        legend = QLabel("Green: engraving · dashed grey: travel · red: keep-out zones · "
+        self.cutout_select = QComboBox()  # which cover version's holes are drawn in red (display only)
+        self.cutout_select.addItems(settings.cutout_versions)
+        self.cutout_select.addItem("No cut-outs")
+        self.cutout_select.setToolTip("Draws the holes of this cover version in red on the preview. The G-code is not affected.")
+        legend = QLabel("Green: engraving · dashed grey: travel · red: cut-outs (drawn only, cut separately) · "
                         "wheel zooms, drag pans, double-click fits")
         legend.setWordWrap(True)
         legend.setStyleSheet("color: #5b6670; font-size: 11px;")
@@ -60,6 +65,7 @@ class MainWindow(QWidget):
         form = QFormLayout()
         form.addRow("Top text", self.text_input)
         form.addRow("Bottom text", self.bottom_input)
+        form.addRow("Cut-outs shown", self.cutout_select)
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(self.create_button)
@@ -81,6 +87,7 @@ class MainWindow(QWidget):
             field.returnPressed.connect(self.create)
             field.textChanged.connect(self._text_changed)
         self.save_button.clicked.connect(self.save)
+        self.cutout_select.currentIndexChanged.connect(self._cutouts_changed)
 
     def create(self) -> None:
         top, bottom = self.text_input.text(), self.bottom_input.text()
@@ -101,6 +108,12 @@ class MainWindow(QWidget):
             f"Program created for “{shown}”: {parsed.strokes} strokes, {parsed.cut_length:.1f} mm engraved. "
             "Check the preview, then save."
         )
+
+    def _cutouts_changed(self) -> None:
+        # The last entry is "No cut-outs"; the others are the version names from the config.
+        versions = self.settings.cutout_versions
+        index = self.cutout_select.currentIndex()
+        self.preview.set_cutout_version(versions[index] if index < len(versions) else None)
 
     def _text_changed(self) -> None:
         # The shown program belongs to the previous text; never leave it saveable.

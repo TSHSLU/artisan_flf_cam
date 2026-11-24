@@ -4,16 +4,13 @@ Output frame ("stock frame"): origin at the top-left corner of the stock, x grow
 right, y grows DOWNWARD, in millimetres. Converting to the machine's axes is gcode.py's job.
 
 There are two lines: "top" (anchored to the top edge) and "bottom" (anchored to the bottom
-edge). Each is centred across the stock, kept inside the edge margin, and kept clear of the
-keep-out zones from the config.
+edge). Each is centred across the stock and kept inside the edge margin.
 """
 
 from __future__ import annotations
 
-import math
-
-from .config import KeepOut, Settings
-from .font import Font, Point, Stroke
+from .config import Settings
+from .font import Font, Stroke
 
 _LABELS = {"top": "Top text", "bottom": "Bottom text"}
 
@@ -93,7 +90,6 @@ def _layout(text: str, font: Font, settings: Settings, line: str) -> list[Stroke
     strokes = [[(x + shift, y) for x, y in stroke] for stroke in strokes]
 
     _check_fits(strokes, settings)
-    _check_keepouts(strokes, settings)
     return strokes
 
 
@@ -112,48 +108,3 @@ def _check_fits(strokes: list[Stroke], s: Settings) -> None:
         )
     if problems:
         raise LayoutError("The text does not fit on the stock: " + "; ".join(problems) + ".")
-
-
-def _check_keepouts(strokes: list[Stroke], s: Settings) -> None:
-    for zone in s.keepouts:
-        if _touches(strokes, zone, s.keepout_clearance):
-            raise LayoutError(
-                f"The text comes too close to the keep-out zone '{zone.name}' "
-                f"(it must stay {s.keepout_clearance:g} mm away). Shorten the text or move it."
-            )
-
-
-def _touches(strokes: list[Stroke], zone: KeepOut, clearance: float) -> bool:
-    """True if any engraved segment is closer than `clearance` to the zone (rectangles are grown square)."""
-    if zone.shape == "circle":
-        centre, limit = (zone.x, zone.y), zone.diameter / 2 + clearance
-        return any(_point_segment_distance(centre, a, b) < limit for stroke in strokes for a, b in zip(stroke, stroke[1:]))
-    box = (zone.x - clearance, zone.y - clearance, zone.x + zone.width + clearance, zone.y + zone.height + clearance)
-    return any(_segment_hits_box(a, b, box) for stroke in strokes for a, b in zip(stroke, stroke[1:]))
-
-
-def _point_segment_distance(p: Point, a: Point, b: Point) -> float:
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    length2 = dx * dx + dy * dy
-    t = 0.0 if length2 == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length2))
-    return math.dist(p, (a[0] + t * dx, a[1] + t * dy))
-
-
-def _segment_hits_box(a: Point, b: Point, box: tuple[float, float, float, float]) -> bool:
-    """Liang-Barsky clipping: does the segment a-b touch or enter the axis-aligned box?"""
-    x0, y0, x1, y1 = box
-    dx, dy = b[0] - a[0], b[1] - a[1]
-    t0, t1 = 0.0, 1.0
-    for p, q in ((-dx, a[0] - x0), (dx, x1 - a[0]), (-dy, a[1] - y0), (dy, y1 - a[1])):
-        if p == 0:
-            if q < 0:
-                return False  # parallel to this edge and outside it
-        else:
-            t = q / p
-            if p < 0:
-                t0 = max(t0, t)
-            else:
-                t1 = min(t1, t)
-            if t0 > t1:
-                return False
-    return True

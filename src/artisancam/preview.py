@@ -62,3 +62,28 @@ def parse_gcode(text: str) -> ParsedProgram:
             moves.append(Move((x, y), (nx, ny), cutting=below and int(float(words[0][1])) == 1))
         x, y, z = nx, ny, nz
     return ParsedProgram(tuple(moves), strokes)
+
+
+def d_outline(cx: float, cy: float, diameter: float, flat: float, side: str, steps: int = 96) -> list[tuple[float, float]]:
+    """Polygon of a circle with one flat side, in the stock frame (x right, y DOWN).
+
+    `flat` is the distance from the centre to the flat; `side` is left, right, top or bottom.
+    Points of the circle beyond the flat are pulled onto it, which turns that part into a straight edge.
+    """
+    r = diameter / 2
+    points = []
+    for i in range(steps):
+        angle = 2 * math.pi * i / steps
+        x, y = cx + r * math.cos(angle), cy + r * math.sin(angle)
+        if side == "right":
+            x = min(x, cx + flat)
+        elif side == "left":
+            x = max(x, cx - flat)
+        elif side == "bottom":
+            y = min(y, cy + flat)
+        elif side == "top":
+            y = max(y, cy - flat)
+        else:
+            raise ValueError(f"unknown flat side {side!r}")
+        points.append((x, y))
+    return points

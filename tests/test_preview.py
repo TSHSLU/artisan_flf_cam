@@ -1,11 +1,12 @@
 import dataclasses
+import math
 import re
 
 import pytest
 
 from artisancam import create_program
-from artisancam.config import KeepOut
-from artisancam.preview import parse_gcode
+from artisancam.config import Cutout
+from artisancam.preview import d_outline, parse_gcode
 from conftest import REFERENCE
 
 SAMPLE = "\r\n".join(
@@ -169,18 +170,80 @@ def test_picture_is_not_mirrored_left_to_right(view, settings):
     assert min(foot_x) <= min(stem_x) + 2  # and starts at the stem
 
 
-def test_keepout_zones_are_drawn_reddish(qapp, settings):
+def _reddish(c):
+    return c.red() > c.green() + 20 and c.red() > c.blue() + 20
+
+
+def _px(image, x_mm, y_mm):
+    sx, sy = 346 / 43.25, 552 / 69  # the scene rect starts at (-3, -3) and is 43.25 x 69 mm
+    return image.pixelColor(round((x_mm + 3) * sx), round((y_mm + 3) * sy))
+
+
+def _two_versions(settings):
+    return dataclasses.replace(
+        settings,
+        cutouts=(
+            Cutout("hole", "A", "circle", x=10, y=30, diameter=4),
+            Cutout("slot", "B", "rect", x=20, y=30, width=8, height=6),
+        ),
+    )
+
+
+def test_first_cutout_version_is_drawn_red_by_default(qapp, settings):
     from artisancam.ui.preview_view import PreviewView
 
-    s = dataclasses.replace(settings, keepouts=(KeepOut("hole", "circle", x=10, y=30, diameter=4),))
-    v = PreviewView(s)
+    v = PreviewView(_two_versions(settings))
+    assert v.cutout_version == "A" and v.drawn_cutouts == 1
     image = _render(v)
-    sx, sy = 346 / 43.25, 552 / 69  # scene rect starts at (-3, -3)
-    c = image.pixelColor(round((10 + 3) * sx), round((30 + 3) * sy))
-    assert c.red() > c.green() + 20 and c.red() > c.blue() + 20
-    outside = image.pixelColor(round((30 + 3) * sx), round((30 + 3) * sy))
-    assert outside.red() == outside.green() == outside.blue()  # plain stock elsewhere
+    assert _reddish(_px(image, 10, 30))
+    assert not _reddish(_px(image, 24, 33))  # version B's slot is not drawn
     v.close()
+
+
+def test_switching_the_version_swaps_the_red_shapes(qapp, settings):
+    from artisancam.ui.preview_view import PreviewView
+
+    v = PreviewView(_two_versions(settings))
+    v.set_cutout_version("B")
+    image = _render(v)
+    assert _reddish(_px(image, 24, 33)) and not _reddish(_px(image, 10, 30))
+    v.set_cutout_version(None)
+    assert v.drawn_cutouts == 0 and not _reddish(_px(_render(v), 24, 33))
+    v.close()
+
+
+def test_a_d_cutout_with_a_flat_is_drawn_with_the_flat(qapp, settings):
+    from artisancam.ui.preview_view import PreviewView
+
+    d = Cutout("D", "A", "d", x=18, y=30, diameter=24, flat=6, flat_side="bottom")
+    v = PreviewView(dataclasses.replace(settings, cutouts=(d,)))
+    image = _render(v)
+    assert _reddish(_px(image, 18, 33))  # inside, above the flat (flat is at y = 36)
+    assert not _reddish(_px(image, 18, 39))  # below the flat the circle would still reach y = 42
+    v.close()
+
+
+def test_cutouts_do_not_draw_any_engraving(qapp, settings):
+    from artisancam.ui.preview_view import PreviewView
+
+    v = PreviewView(_two_versions(settings))
+    assert v.drawn_cut_moves == 0 and _green_rows(_render(v)) == []
+    v.close()
+
+
+@pytest.mark.parametrize("side", ["left", "right", "top", "bottom"])
+def test_d_outline_is_a_circle_cut_off_at_the_flat(side):
+    pts = d_outline(18, 30, 24, 6, side)
+    assert all(math.dist(p, (18, 30)) <= 12 + 1e-9 for p in pts)
+    axis, sign = {"left": (0, -1), "right": (0, 1), "top": (1, -1), "bottom": (1, 1)}[side]
+    limit = (18, 30)[axis] + sign * 6
+    assert max(sign * (p[axis] - limit) for p in pts) == pytest.approx(0)  # nothing beyond the flat
+    assert sum(1 for p in pts if abs(p[axis] - limit) < 1e-9) > 10  # many points lie on the flat itself
+
+
+def test_d_outline_rejects_an_unknown_side():
+    with pytest.raises(ValueError):
+        d_outline(0, 0, 24, 6, "middle")
 
 
 def _darkest(image):

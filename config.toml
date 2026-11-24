@@ -4,18 +4,17 @@
 # above. The engraving lies to the right of and below the origin, so in the G-code
 # X is >= 0 and Y is <= 0. Z = 0 is the top of the stock.
 #
-# In this file, positions on the stock (keep-out zones) are measured the way you read
-# a drawing: x to the right and y DOWNWARD from the top-left corner.
+# In this file, positions on the stock (cut-outs) are measured the way you read a
+# drawing: x to the right and y DOWNWARD from the top-left corner.
 
 [stock]
 width  = 37.25    # X size of the FLF cover
-length = 63.0     # Y size
+length = 62.5     # Y size
 
 [text]               # shared by the top and the bottom line
 letter_gap        = 460    # gap between the ink of neighbouring letters, in font units (capital height = 900)
 space_width       = 380    # extra gap for each space character, same units
 edge_margin       = 1.0    # engraving must stay at least this far from every stock edge
-keepout_clearance = 1.0    # engraving must stay at least this far from every keep-out zone
 
 [text_top]
 height = 3.5      # capital-letter height
@@ -23,27 +22,75 @@ margin = 4.0      # from the top edge down to the top of the capital letters
 
 [text_bottom]
 height = 3.5      # capital-letter height
-margin = 4.0      # from the bottom edge up to the baseline of the capital letters
+margin = 5.0      # from the bottom edge up to the baseline of the capital letters
 
-# Keep-out zones: areas the text must not touch (screw holes, the D-cut, a clamp). The
-# machine does not cut them; this only stops the program from engraving into them.
-# Add one [[keepout]] block per zone. NONE ARE DEFINED YET: until you add them, the
-# text is NOT checked against the holes.
+# Cut-outs: the holes in the cover (D hole, screw holes). They are cut by a separate Fusion
+# program; here they are only DRAWN in red on the preview so you can see where the engraving
+# sits relative to them. They never block or change the G-code.
 #
-# [[keepout]]
-# name   = "D-cut"
-# shape  = "rect"       # x, y = top-left corner of the zone
-# x      = 10.0
-# y      = 30.0
-# width  = 17.0
-# height = 12.0
+# One [[cutout]] block per shape. Blocks with the same `version` belong together, and the
+# window has a dropdown to choose which version is drawn.
+#   shape = "circle": x, y = centre, diameter
+#   shape = "rect":   x, y = top-left corner, width, height
+#   shape = "d":      x, y = centre, diameter, and optionally the flat side of the D:
+#                     flat = distance from the centre to the flat (mm, less than the radius)
+#                     flat_side = "left" | "right" | "top" | "bottom"
 #
-# [[keepout]]
-# name     = "Screw hole 1"
-# shape    = "circle"   # x, y = centre of the hole
-# x        = 4.0
-# y        = 4.0
-# diameter = 3.2
+# !! Versions 1xD and 2xD below use ASSUMED numbers. Only the D24 diameter and the screw hole x
+# !! positions (9 and 28) come from you. Check every value marked ASSUMED against your
+# !! Fusion cut-out program and correct it here.
+
+[[cutout]]
+name     = "D hole"
+version  = "1xD"
+shape    = "d"
+x        = 18.5       # ASSUMED: midway between the two screw holes
+y        = 31.25      # ASSUMED: vertical centre of the cover
+diameter = 24.0       # D24
+# flat      = 10.5    # flat side of the D is not known yet: set both lines to draw it
+# flat_side = "bottom"
+
+[[cutout]]
+name     = "Screw hole 1"
+version  = "1xD"
+shape    = "circle"
+x        = 9.0
+y        = 19.25      # ASSUMED: 12 mm above the centre of the D hole
+diameter = 3.2        
+
+[[cutout]]
+name     = "Screw hole 2"
+version  = "1xD"
+shape    = "circle"
+x        = 28.0
+y        = 43.25      # ASSUMED: 12 mm below the centre of the D hole
+diameter = 3.2        
+
+# Version 2xD: two D holes above each other. !! ALL numbers below are ASSUMED (nothing about
+# !! this version was given except "two holes above each other"). Same D24 size as 1xD, centred
+# !! on the width, 28 mm apart. No screw holes are drawn. With these positions the lower hole
+# !! reaches y = 61, so a bottom text line would overlap it: 2xD covers probably carry only the
+# !! top text. Correct the numbers, and add screw holes if there are any.
+
+[[cutout]]
+name     = "D hole upper"
+version  = "2xD"
+shape    = "d"
+x        = 18.5       # ASSUMED
+y        = 21.0       # ASSUMED
+diameter = 24.0       # ASSUMED (same as 1xD)
+# flat      = 10.5    # flat side not known yet: set both lines to draw it
+# flat_side = "bottom"
+
+[[cutout]]
+name     = "D hole lower"
+version  = "2xD"
+shape    = "d"
+x        = 18.5       # ASSUMED
+y        = 49.0       # ASSUMED
+diameter = 24.0       # ASSUMED (same as 1xD)
+# flat      = 10.5
+# flat_side = "bottom"
 
 [engraving]
 depth = 0.2           # cutting depth below the stock top (60 degree V-bit)

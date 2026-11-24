@@ -2,22 +2,23 @@
 
 It parses the G-code text (see preview.py) and draws it on a QGraphicsScene whose units are
 millimetres and whose origin is the stock's top-left corner, x right and y DOWN, the same frame
-the keep-out zones use. Machine Y is negative below the origin, so the scene uses y = -Y.
+the cut-outs use. Machine Y is negative below the origin, so the scene uses y = -Y.
 Mouse wheel zooms, dragging pans, a double click fits the stock to the view again.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView
 
 from ..config import Settings
-from ..preview import ParsedProgram, parse_gcode
+from ..config import Cutout
+from ..preview import ParsedProgram, d_outline, parse_gcode
 
 CUT_COLOR = QColor("#0b8a4a")
 TRAVEL_COLOR = QColor("#9aa4ad")
-ZONE_COLOR = QColor("#d64545")
+CUTOUT_COLOR = QColor("#d64545")
 ORIGIN_COLOR = QColor("#d64545")
 START_COLOR = QColor("#2563eb")
 _PADDING = 3.0  # mm of empty space around the stock in the view
@@ -45,6 +46,8 @@ class PreviewView(QGraphicsView):
         self.setMinimumSize(220, 320)
         self._auto_fit = True
         self._program_items: list[QGraphicsItem] = []
+        self._cutout_items: list[QGraphicsItem] = []
+        self._cutout_version: str | None = None
         self._drawn_cut_moves = 0
         self._stale = False
 
@@ -53,19 +56,10 @@ class PreviewView(QGraphicsView):
         self._scene.setSceneRect(self._stock.adjusted(-_PADDING, -_PADDING, _PADDING, _PADDING))
         stock = self._scene.addRect(self._stock, _pen(QColor("#6b7782"), 1.2), QBrush(QColor("#ffffff")))
         stock.setZValue(0)
-        for zone in settings.keepouts:
-            if zone.shape == "circle":
-                r = zone.diameter / 2
-                item = self._scene.addEllipse(zone.x - r, zone.y - r, zone.diameter, zone.diameter)
-            else:
-                item = self._scene.addRect(zone.x, zone.y, zone.width, zone.height)
-            item.setPen(_pen(ZONE_COLOR, 1.0))
-            item.setBrush(QBrush(QColor(214, 69, 69, 55)))
-            item.setToolTip(f"Keep-out zone: {zone.name}")
-            item.setZValue(1)
         origin = self._scene.addEllipse(-0.6, -0.6, 1.2, 1.2, _pen(ORIGIN_COLOR, 1.5), QBrush(QColor(255, 255, 255)))
         origin.setZValue(5)
         origin.setToolTip("Origin (X0 Y0): top-left corner of the stock")
+        self.set_cutout_version(settings.cutout_versions[0] if settings.cutout_versions else None)
 
     # --- public API ---------------------------------------------------------------------------------
 
@@ -77,6 +71,39 @@ class PreviewView(QGraphicsView):
     @property
     def stale(self) -> bool:
         return self._stale
+
+    @property
+    def cutout_version(self) -> str | None:
+        """The cut-out version currently drawn in red, or None."""
+        return self._cutout_version
+
+    @property
+    def drawn_cutouts(self) -> int:
+        return len(self._cutout_items)
+
+    def set_cutout_version(self, version: str | None) -> None:
+        """Draw the cut-outs of one version in red (None draws none). Display only: the G-code is unaffected."""
+        for item in self._cutout_items:
+            self._scene.removeItem(item)
+        self._cutout_items = []
+        self._cutout_version = version
+        for cutout in self.settings.cutouts:
+            if cutout.version == version:
+                item = self._add_cutout(cutout)
+                item.setPen(_pen(CUTOUT_COLOR, 1.2))
+                item.setBrush(QBrush(QColor(214, 69, 69, 70)))
+                item.setToolTip(f"{cutout.name} (cut separately)")
+                item.setZValue(1)
+                self._cutout_items.append(item)
+
+    def _add_cutout(self, c: Cutout) -> QGraphicsItem:
+        if c.shape == "rect":
+            return self._scene.addRect(c.x, c.y, c.width, c.height)
+        if c.shape == "d" and c.flat:
+            polygon = QPolygonF([QPointF(x, y) for x, y in d_outline(c.x, c.y, c.diameter, c.flat, c.flat_side)])
+            return self._scene.addPolygon(polygon)
+        r = c.diameter / 2  # a circle, or a D whose flat side is not defined yet
+        return self._scene.addEllipse(c.x - r, c.y - r, c.diameter, c.diameter)
 
     def show_program(self, gcode: str) -> ParsedProgram:
         """Parse the G-code text and draw it, replacing whatever was drawn before."""

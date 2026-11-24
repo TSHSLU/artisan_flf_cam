@@ -4,7 +4,7 @@ import re
 import pytest
 
 from artisancam import create_program
-from artisancam.config import KeepOut
+from artisancam.config import Cutout
 from artisancam.font import load_default_font
 from artisancam.layout import LayoutError, layout_lines, layout_text
 from gcode_check import check
@@ -17,10 +17,6 @@ def bounds(strokes):
     xs = [x for s in strokes for x, _ in s]
     ys = [y for s in strokes for _, y in s]
     return min(xs), max(xs), min(ys), max(ys)
-
-
-def with_zones(settings, *zones):
-    return dataclasses.replace(settings, keepouts=tuple(zones))
 
 
 # --- bottom line ---------------------------------------------------------------------------------
@@ -83,66 +79,15 @@ def test_overlapping_lines_are_rejected(settings):
         layout_lines("HDMI", "HDMI", FONT, s)
 
 
-# --- keep-out zones ------------------------------------------------------------------------------------
+# --- cut-outs are only drawn, never block ---------------------------------------------------------------
 
 
-def test_default_config_has_no_zones_so_nothing_is_blocked(settings):
-    assert settings.keepouts == ()
-
-
-def test_rect_zone_far_away_does_not_block(settings):
-    s = with_zones(settings, KeepOut("D-cut", "rect", x=10, y=30, width=17, height=12))
-    layout_lines("HDMI", "HDMI", FONT, s)
-
-
-def test_rect_zone_under_the_text_blocks_it_and_is_named(settings):
-    s = with_zones(settings, KeepOut("D-cut", "rect", x=10, y=3, width=17, height=6))
-    with pytest.raises(LayoutError, match="'D-cut'"):
-        layout_text("HDMI", FONT, s)
-
-
-def test_clearance_is_enforced_around_the_zone(settings):
-    # The "I" ink spans y 4.0..7.5 mm; the zone starts 0.5 mm below it (y = 8.0).
-    zone = KeepOut("clamp", "rect", x=0, y=8.0, width=37.25, height=5)
-    layout_text("I", FONT, with_zones(dataclasses.replace(settings, keepout_clearance=0.4), zone))  # 0.5 away: ok
-    with pytest.raises(LayoutError, match="keep-out"):
-        layout_text("I", FONT, with_zones(dataclasses.replace(settings, keepout_clearance=0.6), zone))
-
-
-def test_circle_zone_blocks_when_ink_is_inside_and_clears_when_far(settings):
-    middle = settings.stock_width / 2
-    hit = with_zones(settings, KeepOut("Screw hole 1", "circle", x=middle, y=5.5, diameter=3.2))
-    with pytest.raises(LayoutError, match="Screw hole 1"):
-        layout_text("I", FONT, hit)  # the "I" stroke runs straight through this hole
-    far = with_zones(settings, KeepOut("Screw hole 1", "circle", x=4, y=5.5, diameter=3.2))
-    layout_text("I", FONT, far)
-
-
-def test_circle_zone_clearance_uses_the_radius_plus_clearance(settings):
-    middle = settings.stock_width / 2
-    # "I" is a vertical line at x=middle from y=4.0 to 7.5; a hole centred 2.0 mm to the side, r=0.5.
-    zone = KeepOut("hole", "circle", x=middle + 2.0, y=5.5, diameter=1.0)
-    # The zone reaches r + clearance = 0.5 + clearance from the hole centre; the stroke is 2.0 mm away.
-    layout_text("I", FONT, with_zones(dataclasses.replace(settings, keepout_clearance=1.4), zone))  # reaches 1.9: clear
-    with pytest.raises(LayoutError):
-        layout_text("I", FONT, with_zones(dataclasses.replace(settings, keepout_clearance=1.6), zone))  # reaches 2.1: hit
-
-
-def test_a_zone_blocks_the_bottom_line_too(settings):
-    s = with_zones(settings, KeepOut("hole", "circle", x=settings.stock_width / 2, y=settings.stock_length - 5.5, diameter=3))
-    layout_text("I", FONT, s, "top")
-    with pytest.raises(LayoutError, match="^Bottom text: .*hole"):
-        layout_text("I", FONT, s, "bottom")
-
-
-def test_a_segment_crossing_a_zone_without_an_endpoint_inside_is_caught(settings):
-    # "-" is one long horizontal segment; a thin zone in the middle has no vertex of the stroke inside it.
-    s = dataclasses.replace(settings, keepout_clearance=0.0, top_margin=4.0)
-    ink = layout_text("-", FONT, s)
-    (x0, y), (x1, _) = ink[0][0], ink[0][-1]
-    zone = KeepOut("thin", "rect", x=(x0 + x1) / 2 - 0.1, y=y - 1.0, width=0.2, height=2.0)
-    with pytest.raises(LayoutError, match="thin"):
-        layout_text("-", FONT, with_zones(s, zone))
+def test_text_over_a_cutout_is_not_blocked(settings):
+    # A hole drawn right under the top text must not stop the program or change the G-code.
+    hole = Cutout("hole", "1xD", "rect", x=5, y=3, width=27, height=6)
+    covered = dataclasses.replace(settings, cutouts=(hole,))
+    bare = dataclasses.replace(settings, cutouts=())
+    assert create_program("HDMI OUT", covered, bottom="Test") == create_program("HDMI OUT", bare, bottom="Test")
 
 
 # --- whole pipeline ------------------------------------------------------------------------------------
