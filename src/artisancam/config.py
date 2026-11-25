@@ -21,6 +21,8 @@ DEFAULTS_PATH = Path(__file__).resolve().parents[2] / "config.defaults.toml"
 
 # Sanity limit for the V-bit engraving depth: guards against a 0.2 -> 2 typo.
 MAX_DEPTH = 1.0
+# Most covers side by side or above each other on one fixture.
+MAX_SLOTS_PER_AXIS = 10
 
 
 class ConfigError(ValueError):
@@ -73,7 +75,24 @@ class Settings:
     retract_feed: float
     spindle_percent: float
     spindle_warmup_s: float
+    fixture_columns: float
+    fixture_rows: float
+    pitch_x: float
+    pitch_y: float
     cutouts: tuple[Cutout, ...] = ()
+
+    @property
+    def columns(self) -> int:
+        return int(self.fixture_columns)
+
+    @property
+    def rows(self) -> int:
+        return int(self.fixture_rows)
+
+    @property
+    def slot_count(self) -> int:
+        """How many covers the fixture holds (1 = the single-cover setup)."""
+        return self.columns * self.rows
 
     @property
     def cutout_versions(self) -> tuple[str, ...]:
@@ -91,7 +110,7 @@ class FieldSpec:
     field: str
     label: str
     unit: str
-    tab: str  # "layout" or "machine"
+    tab: str  # "layout", "fixture" or "machine"
     decimals: int
     maximum: float
     may_be_zero: bool = False
@@ -109,6 +128,10 @@ FIELDS: tuple[FieldSpec, ...] = (
     FieldSpec("text", "letter_gap", "letter_gap", "Gap between letters", "font units", "layout", 0, 5000),
     FieldSpec("text", "space_width", "space_width", "Extra width of a space", "font units", "layout", 0, 5000),
     FieldSpec("text", "edge_margin", "edge_margin", "Minimum distance to the edges", "mm", "layout", 2, 100, True),
+    FieldSpec("fixture", "columns", "fixture_columns", "Covers side by side (columns)", "", "fixture", 0, MAX_SLOTS_PER_AXIS),
+    FieldSpec("fixture", "rows", "fixture_rows", "Covers above each other (rows)", "", "fixture", 0, MAX_SLOTS_PER_AXIS),
+    FieldSpec("fixture", "pitch_x", "pitch_x", "Slot pitch along X (corner to corner)", "mm", "fixture", 2, 1000),
+    FieldSpec("fixture", "pitch_y", "pitch_y", "Slot pitch along Y (corner to corner)", "mm", "fixture", 2, 1000),
     FieldSpec("engraving", "depth", "depth", "Engraving depth", "mm", "machine", 3, MAX_DEPTH),
     FieldSpec("heights", "clearance", "clearance_z", "Clearance height (start and end)", "mm", "machine", 2, 100),
     FieldSpec("heights", "retract", "retract_z", "Retract height (between strokes)", "mm", "machine", 2, 100),
@@ -225,6 +248,17 @@ def parse_settings(raw: dict) -> Settings:
         raise ConfigError(f"[spindle] percent must be above 50 and at most 100, got {s.spindle_percent:g}")
     if 2 * s.edge_margin >= min(s.stock_width, s.stock_length):
         raise ConfigError("[text] edge_margin is larger than the stock allows")
+    for key, value in (("columns", s.fixture_columns), ("rows", s.fixture_rows)):
+        if not value.is_integer() or not 1 <= value <= MAX_SLOTS_PER_AXIS:
+            raise ConfigError(f"[fixture] {key} must be a whole number from 1 to {MAX_SLOTS_PER_AXIS}, got {value:g}")
+    if s.columns > 1 and s.pitch_x < s.stock_width:
+        raise ConfigError(
+            f"[fixture] pitch_x {s.pitch_x:g} mm is smaller than the cover width {s.stock_width:g} mm: the covers would overlap"
+        )
+    if s.rows > 1 and s.pitch_y < s.stock_length:
+        raise ConfigError(
+            f"[fixture] pitch_y {s.pitch_y:g} mm is smaller than the cover length {s.stock_length:g} mm: the covers would overlap"
+        )
     return s
 
 

@@ -3,17 +3,25 @@
 It parses the G-code text (see preview.py) and draws it on a QGraphicsScene whose units are
 millimetres and whose origin is the stock's top-left corner, x right and y DOWN, the same frame
 the cut-outs use. Machine Y is negative below the origin, so the scene uses y = -Y.
-Mouse wheel zooms, dragging pans, a double click fits the stock to the view again.
+With a multi-cover fixture every slot is drawn, numbered, with its cut-outs; slots without text are
+dashed and grey. Mouse wheel zooms, dragging pans, a double click fits everything to the view again.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPolygonF
-from PySide6.QtWidgets import QAbstractGraphicsShapeItem, QGraphicsItem, QGraphicsScene, QGraphicsView
+from PySide6.QtGui import QBrush, QColor, QFont, QPainter, QPainterPath, QPen, QPolygonF, QTransform
+from PySide6.QtWidgets import (
+    QAbstractGraphicsShapeItem,
+    QGraphicsItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsSimpleTextItem,
+    QGraphicsView,
+)
 
-from ..config import Settings
-from ..config import Cutout
+from ..config import Cutout, Settings
+from ..fixture import fixture_size, slot_offsets
 from ..preview import ParsedProgram, d_outline, parse_gcode
 
 CUT_COLOR = QColor("#0b8a4a")
@@ -21,6 +29,8 @@ TRAVEL_COLOR = QColor("#9aa4ad")
 CUTOUT_COLOR = QColor("#d64545")
 START_COLOR = QColor("#2563eb")
 REFERENCE_SIZE_PX = 16  # diameter of the reference-point symbol on screen, whatever the zoom
+SLOT_COLOR = QColor("#6b7782")
+EMPTY_SLOT_FILL = QColor("#f1f3f5")
 _PADDING = 3.0  # mm of empty space around the stock in the view
 _STALE_OPACITY = 0.25
 
@@ -82,6 +92,8 @@ class PreviewView(QGraphicsView):
         self._drawn_cut_moves = 0
         self._stale = False
         self._stock_items: list[QGraphicsItem] = []
+        self._slot_rects: list[QGraphicsRectItem] = []
+        self._filled: list[bool] = []
         self.set_settings(settings)
         self.set_cutout_version(settings.cutout_versions[0] if settings.cutout_versions else None)
 
@@ -98,23 +110,63 @@ class PreviewView(QGraphicsView):
             self._scene.removeItem(item)
         self.settings = settings
         w, l = settings.stock_width, settings.stock_length
-        self._stock = QRectF(0, 0, w, l)
-        self._scene.setSceneRect(self._stock.adjusted(-_PADDING, -_PADDING, _PADDING, _PADDING))
-        stock = self._scene.addRect(self._stock, _pen(QColor("#6b7782"), 1.2), QBrush(QColor("#ffffff")))
-        stock.setZValue(0)
-        self.reference_marker = ReferenceMarker()  # placed at scene (0, 0): the cover's top-left corner
+        area_w, area_l = fixture_size(settings)
+        self._scene.setSceneRect(QRectF(0, 0, area_w, area_l).adjusted(-_PADDING, -_PADDING, _PADDING, _PADDING))
+        multi = settings.slot_count > 1
+        self._stock_items, self._slot_rects = [], []
+        for number, (dx, dy) in enumerate(slot_offsets(settings), 1):
+            rect = self._scene.addRect(QRectF(dx, dy, w, l))
+            rect.setZValue(0)
+            rect.setToolTip(f"Slot {number}" if multi else "The cover")
+            self._slot_rects.append(rect)
+            self._stock_items.append(rect)
+            if multi:  # slot number in the bottom-left corner, constant size on screen
+                label = QGraphicsSimpleTextItem(str(number))
+                font = QFont()
+                font.setBold(True)
+                label.setFont(font)
+                label.setBrush(QBrush(SLOT_COLOR))
+                label.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
+                label.setPos(dx, dy + l)
+                label.setTransform(QTransform.fromTranslate(4, -label.boundingRect().height() - 2))
+                label.setZValue(4)
+                self._scene.addItem(label)
+                self._stock_items.append(label)
+        self._filled = [True] * settings.slot_count
+        self._style_slots()
+        corner = "top-left corner of slot 1" if multi else "top-left corner of the cover"
+        self.reference_marker = ReferenceMarker()  # placed at scene (0, 0): slot 1's top-left corner
         self.reference_marker.setZValue(5)
-        self.reference_marker.setToolTip(
-            "Reference point: set X0 Y0 here (top-left corner of the cover) and Z0 on the cover's top face"
-        )
+        self.reference_marker.setToolTip(f"Reference point: set X0 Y0 here ({corner}) and Z0 on the cover's top face")
         self._scene.addItem(self.reference_marker)
-        self._stock_items = [stock, self.reference_marker]
+        self._stock_items.append(self.reference_marker)
         version = self._cutout_version
         if version is not None and version not in settings.cutout_versions:
             version = settings.cutout_versions[0] if settings.cutout_versions else None
         self.set_cutout_version(version)
         if self._auto_fit:
             self.fit()
+
+    @property
+    def slot_count(self) -> int:
+        return len(self._slot_rects)
+
+    @property
+    def filled_slots(self) -> tuple[bool, ...]:
+        """Which slots are drawn as "will be engraved" (True) or as empty, dashed and grey (False)."""
+        return tuple(self._filled)
+
+    def set_slot_states(self, filled: list[bool]) -> None:
+        """Draw slots that have text normally and slots without text dashed and grey."""
+        if len(filled) != len(self._slot_rects):
+            raise ValueError(f"{len(filled)} slot states for {len(self._slot_rects)} slots")
+        self._filled = list(filled)
+        self._style_slots()
+
+    def _style_slots(self) -> None:
+        for rect, filled in zip(self._slot_rects, self._filled):
+            rect.setPen(_pen(SLOT_COLOR, 1.2, dashed=not filled))
+            rect.setBrush(QBrush(QColor("#ffffff") if filled else EMPTY_SLOT_FILL))
 
     @property
     def drawn_cut_moves(self) -> int:
@@ -140,14 +192,18 @@ class PreviewView(QGraphicsView):
             self._scene.removeItem(item)
         self._cutout_items = []
         self._cutout_version = version
-        for cutout in self.settings.cutouts:
-            if cutout.version == version:
-                item = self._add_cutout(cutout)
-                item.setPen(_pen(CUTOUT_COLOR, 1.2))
-                item.setBrush(QBrush(QColor(214, 69, 69, 70)))
-                item.setToolTip(f"{cutout.name} (cut separately)")
-                item.setZValue(1)
-                self._cutout_items.append(item)
+        offsets = slot_offsets(self.settings)
+        for number, (dx, dy) in enumerate(offsets, 1):  # the same holes in every slot
+            for cutout in self.settings.cutouts:
+                if cutout.version == version:
+                    item = self._add_cutout(cutout)
+                    item.setPos(dx, dy)
+                    item.setPen(_pen(CUTOUT_COLOR, 1.2))
+                    item.setBrush(QBrush(QColor(214, 69, 69, 70)))
+                    prefix = f"Slot {number}: " if len(offsets) > 1 else ""
+                    item.setToolTip(f"{prefix}{cutout.name} (cut separately)")
+                    item.setZValue(1)
+                    self._cutout_items.append(item)
 
     def _add_cutout(self, c: Cutout) -> QAbstractGraphicsShapeItem:
         if c.shape == "rect":

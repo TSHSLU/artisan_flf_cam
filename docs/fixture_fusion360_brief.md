@@ -94,3 +94,34 @@ The engraving program uses X = cover width and Y = cover length, so this must ho
 - Whether the cover flexes under the V-bit. If a test engraving shows uneven depth, a
   support block under the cover may be needed. Do not add it now; only mention it.
 - Screw type: socket head (assumed, counterbore) or countersunk (then use a countersink).
+
+## Variant: several covers on one plate (added later)
+
+The program can now engrave several covers in one run. The slots form a grid that is set in
+`config.toml`:
+
+```toml
+[fixture]
+columns = 3      # covers side by side along X
+rows    = 2      # covers above each other along Y
+pitch_x = 45.0   # X distance between the top-left corners of neighbouring covers (mm)
+pitch_y = 70.0   # Y distance between the top-left corners of neighbouring covers (mm)
+```
+
+For a multi-cover plate:
+
+1. Make `columns`, `rows`, `pitch_x` and `pitch_y` user parameters and pattern the snap opening
+   (with its underside relief pocket, finger notch and TOP mark) on that grid. Slot 1 is the
+   top-left slot; slots are numbered row by row (1 2 3 / 4 5 6). Engrave or emboss the numbers
+   next to the openings.
+2. The pitch must be at least the cover size (37.25 x 62.5 mm) so the covers do not touch.
+   **Check the walls between the underside relief pockets:** with pitch 45 mm and a relief of
+   opening + 6 mm per side, the pockets are 43.4 mm wide and leave only about 1.6 mm between
+   them. Either reduce the relief margin, or make one shared pocket under each row.
+3. The plate gets larger than the 100 x 100 mm screw pattern (about 127 x 133 mm of covers for
+   3 x 2, plus a border). Keep the 4 x M4 counterbored holes on the 100 x 100 pattern, centred
+   on the plate, and make sure no hole lands inside a relief pocket.
+4. Report **the position of slot 1's top-left cover corner** relative to the centre of the screw
+   pattern (this is X0 Y0 for the whole run), and the pitch as built.
+5. After printing, **measure the real pitch** (corner of slot 1 to corner of slot 3 and of slot 4)
+   and give it to the user: the measured values go into `config.toml`.

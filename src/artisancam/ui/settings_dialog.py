@@ -27,6 +27,12 @@ from ..config import FIELDS, ConfigError, Settings, load_defaults, save_settings
 _TABS = (
     ("layout", "Cover and text", None),
     (
+        "fixture",
+        "Fixture",
+        "Several covers in one run. Slot 1 is the top-left slot; X0 Y0 is set on its top-left corner. "
+        "Copy the pitch from the fixture plate design (measure a printed plate if in doubt).",
+    ),
+    (
         "machine",
         "Machine",
         "These values match the program that ran successfully on the machine. "
@@ -67,7 +73,8 @@ class SettingsDialog(QDialog):
                 box.setLocale(QLocale.c())  # always "0.200" like the file and the G-code, never "0,200"
                 box.setDecimals(spec.decimals)
                 box.setRange(0.0 if spec.may_be_zero else 10.0**-spec.decimals, spec.maximum)
-                box.setSuffix(f" {spec.unit}")
+                if spec.unit:
+                    box.setSuffix(f" {spec.unit}")
                 box.setToolTip(f"[{spec.section}] {spec.key} in config.toml")
                 form.addRow(spec.label, box)
                 self.boxes[spec.field] = box

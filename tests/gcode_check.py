@@ -15,8 +15,24 @@ _WORD = re.compile(r"([A-Z])(-?\d+(?:\.\d+)?)")
 EPS = 1e-6
 
 
-def check(data: bytes, *, stock_width: float, stock_length: float, depth: float, retract_z: float, edge_margin: float = 0.0) -> list[str]:
+def check(
+    data: bytes,
+    *,
+    stock_width: float,
+    stock_length: float,
+    depth: float,
+    retract_z: float,
+    edge_margin: float = 0.0,
+    columns: int = 1,
+    rows: int = 1,
+    pitch_x: float = 0.0,
+    pitch_y: float = 0.0,
+) -> list[str]:
+    """With a multi-cover fixture (columns x rows slots), the allowed XY area is the whole fixture:
+    from slot 1's top-left corner to the far corner of the last slot."""
     problems: list[str] = []
+    area_width = (columns - 1) * pitch_x + stock_width
+    area_length = (rows - 1) * pitch_y + stock_length
     try:
         text = data.decode("ascii")
     except UnicodeDecodeError:
@@ -71,7 +87,7 @@ def check(data: bytes, *, stock_width: float, stock_length: float, depth: float,
                 problems.append(f"{where}: rapid XY move below retract height Z{retract_z:g}")
             if new["Z"] < -depth - EPS:
                 problems.append(f"{where}: Z{new['Z']:g} is deeper than the allowed -{depth:g}")
-            if not (edge_margin - EPS <= new["X"] <= stock_width - edge_margin + EPS and -(stock_length - edge_margin) - EPS <= new["Y"] <= -edge_margin + EPS):
+            if not (edge_margin - EPS <= new["X"] <= area_width - edge_margin + EPS and -(area_length - edge_margin) - EPS <= new["Y"] <= -edge_margin + EPS):
                 # The final G0 X0 Y0 park move and the start move are the only moves allowed on the origin.
                 if not (code == "G0" and new["X"] == 0 and new["Y"] == 0 and new["Z"] >= retract_z):
                     problems.append(f"{where}: XY ({new['X']:g}, {new['Y']:g}) leaves the stock")
@@ -95,6 +111,8 @@ if __name__ == "__main__":
         Path(sys.argv[1]).read_bytes(),
         stock_width=cfg["stock"]["width"], stock_length=cfg["stock"]["length"],
         depth=cfg["engraving"]["depth"], retract_z=cfg["heights"]["retract"],
+        **({"columns": int(cfg["fixture"]["columns"]), "rows": int(cfg["fixture"]["rows"]),
+            "pitch_x": cfg["fixture"]["pitch_x"], "pitch_y": cfg["fixture"]["pitch_y"]} if "fixture" in cfg else {}),
     )
     print("\n".join(issues) or "OK")
     raise SystemExit(1 if issues else 0)

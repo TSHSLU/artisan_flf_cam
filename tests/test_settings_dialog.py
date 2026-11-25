@@ -34,18 +34,17 @@ def test_one_box_per_setting_showing_the_current_value(dialog, paths):
         assert dialog.boxes[field].value() == pytest.approx(value)
 
 
-def test_two_tabs_and_machine_values_on_the_machine_tab(dialog):
-    assert [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())] == ["Cover and text", "Machine"]
-    layout_page, machine_page = dialog.tabs.widget(0), dialog.tabs.widget(1)
+def test_three_tabs_and_every_value_on_its_tab(dialog):
+    assert [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())] == ["Cover and text", "Fixture", "Machine"]
+    pages = {"layout": dialog.tabs.widget(0), "fixture": dialog.tabs.widget(1), "machine": dialog.tabs.widget(2)}
     for spec in FIELDS:
-        page = machine_page if spec.tab == "machine" else layout_page
-        assert page.isAncestorOf(dialog.boxes[spec.field]), spec.field
+        assert pages[spec.tab].isAncestorOf(dialog.boxes[spec.field]), spec.field
 
 
 def test_machine_tab_shows_a_warning(dialog):
     from PySide6.QtWidgets import QLabel
 
-    texts = [label.text() for label in dialog.tabs.widget(1).findChildren(QLabel)]
+    texts = [label.text() for label in dialog.tabs.widget(2).findChildren(QLabel)]
     assert any("known-good" in t for t in texts)
 
 

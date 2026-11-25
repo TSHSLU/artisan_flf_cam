@@ -36,7 +36,9 @@ def test_fields_cover_every_setting_except_cutouts():
 
 def test_machine_values_are_on_the_machine_tab():
     tab = {f.field: f.tab for f in FIELDS}
-    assert set(tab.values()) == {"layout", "machine"}
+    assert set(tab.values()) == {"layout", "fixture", "machine"}
+    for field in ("fixture_columns", "fixture_rows", "pitch_x", "pitch_y"):
+        assert tab[field] == "fixture"
     for field in ("depth", "clearance_z", "retract_z", "feed_z", "cutting_feed", "plunge_feed", "retract_feed", "spindle_percent"):
         assert tab[field] == "machine"
     for field in ("stock_width", "stock_length", "top_height", "bottom_margin"):

@@ -24,6 +24,12 @@ margin = 2.5      # from the top edge down to the top of the capital letters
 height = 2.5      # capital-letter height
 margin = 2.5      # from the bottom edge up to the baseline of the capital letters
 
+[fixture]          # several covers in one run: slots in a grid, X0 Y0 on the top-left corner of slot 1
+columns = 3        # covers side by side along X
+rows    = 2        # covers above each other along Y
+pitch_x = 45.0     # X distance between the top-left corners of neighbouring slots (mm); copy from the fixture plate
+pitch_y = 70.0     # Y distance (downward) between the top-left corners of slots (mm); copy from the fixture plate
+
 # Cut-outs: the holes in the cover (D hole, screw holes). They are cut by a separate Fusion
 # program; here they are only DRAWN in red on the preview so you can see where the engraving
 # sits relative to them. They never block or change the G-code.
