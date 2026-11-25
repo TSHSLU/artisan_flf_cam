@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen, QPolygonF
-from PySide6.QtWidgets import QGraphicsItem, QGraphicsScene, QGraphicsView
+from PySide6.QtWidgets import QAbstractGraphicsShapeItem, QGraphicsItem, QGraphicsScene, QGraphicsView
 
 from ..config import Settings
 from ..config import Cutout
@@ -50,7 +50,22 @@ class PreviewView(QGraphicsView):
         self._cutout_version: str | None = None
         self._drawn_cut_moves = 0
         self._stale = False
+        self._stock_items: list[QGraphicsItem] = []
+        self.set_settings(settings)
+        self.set_cutout_version(settings.cutout_versions[0] if settings.cutout_versions else None)
 
+    # --- public API ---------------------------------------------------------------------------------
+
+    def set_settings(self, settings: Settings) -> None:
+        """Redraw the cover outline and cut-outs for new settings. A shown program is removed.
+
+        The chosen cut-out version is kept if it still exists (or if "none" was chosen); otherwise the
+        first version is shown.
+        """
+        self.clear_program()
+        for item in self._stock_items:
+            self._scene.removeItem(item)
+        self.settings = settings
         w, l = settings.stock_width, settings.stock_length
         self._stock = QRectF(0, 0, w, l)
         self._scene.setSceneRect(self._stock.adjusted(-_PADDING, -_PADDING, _PADDING, _PADDING))
@@ -59,9 +74,13 @@ class PreviewView(QGraphicsView):
         origin = self._scene.addEllipse(-0.6, -0.6, 1.2, 1.2, _pen(ORIGIN_COLOR, 1.5), QBrush(QColor(255, 255, 255)))
         origin.setZValue(5)
         origin.setToolTip("Origin (X0 Y0): top-left corner of the stock")
-        self.set_cutout_version(settings.cutout_versions[0] if settings.cutout_versions else None)
-
-    # --- public API ---------------------------------------------------------------------------------
+        self._stock_items = [stock, origin]
+        version = self._cutout_version
+        if version is not None and version not in settings.cutout_versions:
+            version = settings.cutout_versions[0] if settings.cutout_versions else None
+        self.set_cutout_version(version)
+        if self._auto_fit:
+            self.fit()
 
     @property
     def drawn_cut_moves(self) -> int:
@@ -96,7 +115,7 @@ class PreviewView(QGraphicsView):
                 item.setZValue(1)
                 self._cutout_items.append(item)
 
-    def _add_cutout(self, c: Cutout) -> QGraphicsItem:
+    def _add_cutout(self, c: Cutout) -> QAbstractGraphicsShapeItem:
         if c.shape == "rect":
             return self._scene.addRect(c.x, c.y, c.width, c.height)
         if c.shape == "d" and c.flat:

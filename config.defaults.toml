@@ -1,0 +1,114 @@
+# FACTORY DEFAULTS - known-good values, saved on 2026-11-25 from the config that ran
+# successfully on the machine. The Settings dialog's "Restore defaults" button reads the
+# numbers from here. The app never writes this file; do not edit it unless you want to
+# change what "Restore defaults" restores. Your working settings live in config.toml.
+#
+# ArtisanCAM configuration. All lengths in millimetres, feeds in mm/min.
+#
+# Coordinate convention: the origin is the TOP-LEFT corner of the stock, seen from
+# above. The engraving lies to the right of and below the origin, so in the G-code
+# X is >= 0 and Y is <= 0. Z = 0 is the top of the stock.
+#
+# In this file, positions on the stock (cut-outs) are measured the way you read a
+# drawing: x to the right and y DOWNWARD from the top-left corner.
+
+[stock]
+width  = 37.25    # X size of the FLF cover
+length = 62.5     # Y size
+
+[text]               # shared by the top and the bottom line
+letter_gap        = 460    # gap between the ink of neighbouring letters, in font units (capital height = 900)
+space_width       = 380    # extra gap for each space character, same units
+edge_margin       = 1.0    # engraving must stay at least this far from every stock edge
+
+[text_top]
+height = 3.5      # capital-letter height
+margin = 4.0      # from the top edge down to the top of the capital letters
+
+[text_bottom]
+height = 3.5      # capital-letter height
+margin = 5.0      # from the bottom edge up to the baseline of the capital letters
+
+# Cut-outs: the holes in the cover (D hole, screw holes). They are cut by a separate Fusion
+# program; here they are only DRAWN in red on the preview so you can see where the engraving
+# sits relative to them. They never block or change the G-code.
+#
+# One [[cutout]] block per shape. Blocks with the same `version` belong together, and the
+# window has a dropdown to choose which version is drawn.
+#   shape = "circle": x, y = centre, diameter
+#   shape = "rect":   x, y = top-left corner, width, height
+#   shape = "d":      x, y = centre, diameter, and optionally the flat side of the D:
+#                     flat = distance from the centre to the flat (mm, less than the radius)
+#                     flat_side = "left" | "right" | "top" | "bottom"
+#
+# !! Values marked ASSUMED are guesses. For 1xD only the D24 diameter and the screw hole x
+# !! positions (9 and 28) come from you; for 2xD everything except x was measured. Check
+# !! every ASSUMED value against a real cover and correct it here.
+
+[[cutout]]
+name     = "D hole"
+version  = "1xD"
+shape    = "d"
+x        = 18.5       # ASSUMED: midway between the two screw holes
+y        = 31.25      # ASSUMED: vertical centre of the cover
+diameter = 24.0       # D24
+# flat      = 10.5    # flat side of the D is not known yet: set both lines to draw it
+# flat_side = "bottom"
+
+[[cutout]]
+name     = "Screw hole 1"
+version  = "1xD"
+shape    = "circle"
+x        = 9.0
+y        = 19.25      # ASSUMED: 12 mm above the centre of the D hole
+diameter = 3.2        
+
+[[cutout]]
+name     = "Screw hole 2"
+version  = "1xD"
+shape    = "circle"
+x        = 28.0
+y        = 43.25      # ASSUMED: 12 mm below the centre of the D hole
+diameter = 3.2        
+
+# Version 2xD: two holes of 23.5 mm above each other, measured on a real 2xD cover.
+# The centres were measured from the BOTTOM edge (18.05 and 44.05 mm); y here is measured
+# from the TOP, so y = 62.5 - measured. If [stock] length changes, these y values do not
+# follow automatically. Only x is assumed (centre of the width). No screw holes.
+
+[[cutout]]
+name     = "Hole upper"
+version  = "2xD"
+shape    = "d"
+x        = 18.625     # ASSUMED: centre of the 37.25 mm width
+y        = 18.45      # measured: 44.05 mm from the bottom edge
+diameter = 23.5       # measured
+# flat      = 10.5    # flat side not known: set both lines to draw it
+# flat_side = "bottom"
+
+[[cutout]]
+name     = "Hole lower"
+version  = "2xD"
+shape    = "d"
+x        = 18.625     # ASSUMED: centre of the 37.25 mm width
+y        = 44.45      # measured: 18.05 mm from the bottom edge
+diameter = 23.5       # measured
+# flat      = 10.5
+# flat_side = "bottom"
+
+[engraving]
+depth = 0.2           # cutting depth below the stock top (60 degree V-bit)
+
+[heights]             # all measured above the stock top (Fusion "from Model top")
+clearance = 10.0      # start and end of the program
+retract   = 5.0       # travel between strokes
+feed      = 5.0       # plunge starts here (if lower than retract, it rapids down to it first)
+
+[feeds]
+cutting = 1600        # engraving moves
+plunge  = 333.3       # Z move down into the material
+retract = 700         # Z move back up out of the material
+
+[spindle]
+percent  = 100        # M3 P<percent>; Snapmaker accepts 50 < percent <= 100
+warmup_s = 2          # G4 dwell after spindle start

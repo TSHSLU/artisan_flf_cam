@@ -22,7 +22,7 @@ def main() -> int:
     except ConfigError as exc:
         QMessageBox.critical(None, "ArtisanCAM", str(exc))
         return 1
-    window = MainWindow(settings)
+    window = MainWindow(settings, config_path=args.config)
     window.show()
     return app.exec()
 

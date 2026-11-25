@@ -12,7 +12,7 @@ python -m venv .venv
 .venv\Scripts\python -m artisancam
 ```
 
-or run startup.bat
+or run start.bat
 
 Fill in the top text, the bottom text, or both (a blank line is skipped), click **Create program**,
 review the G-code, **Save as…** to write a `.cnc` file.
@@ -28,8 +28,21 @@ corner of the stock, Z = 0 is the top of the stock. Bad values fail with a messa
 `config.toml`: circles, rectangles or D shapes, measured from the top-left corner (x right, y down).
 They are cut by a separate program; here they are only drawn in red on the preview, and a dropdown
 in the window chooses which version (for example `1xD`) is shown. They never block the text or
-change the G-code. Versions 1xD and 2xD currently use assumed numbers (see the comments in the file) until
-they are checked against the Fusion cut-out programs.
+change the G-code. Values marked `ASSUMED` in the file are guesses; 2xD was measured on a real cover except
+for its x position.
+
+## Settings dialog
+
+**Settings…** in the main window edits every number of `config.toml` (not the cut-outs) on two
+tabs: *Cover and text* and *Machine*. **Save** checks the values with the same rules as at
+startup, then writes them back into `config.toml`. Only the changed numbers are replaced:
+comments, layout and the cut-outs stay as they are. The previous file is kept as
+`config.toml.bak`. The window uses the new values at once; a program shown before is faded
+and must be created again.
+
+**Restore Defaults** fills in the known-good values from
+[config.defaults.toml](config.defaults.toml) (a snapshot of the settings that ran successfully
+on the machine). Nothing is written until you click Save. The app never writes the defaults file.
 
 ## Test
 
@@ -45,15 +58,20 @@ compare the output against it. The `reference/` folder content is gitignored.
 ## Layout
 
 ```
-config.toml                 all job/machine values
+config.toml                 all job/machine values (edited by hand or by the Settings dialog)
+config.defaults.toml        known-good values for "Restore Defaults" (read only)
 src/artisancam/
   config.py                 load + validate config.toml
   font.py                   bundled stroke font -> strokes (arcs flattened)
   layout.py                 strokes -> millimetres, top/bottom line, edge-margin check
   toolpath.py               strokes -> ordered cuts
   gcode.py                  cuts -> G-code (machine dialect and origin live here)
-  ui/window.py              the single window
+  preview.py                G-code text -> moves, for the preview
+  ui/window.py              the main window
+  ui/preview_view.py        the 2D preview
+  ui/settings_dialog.py     the Settings dialog
 tests/                      pytest + independent G-code checker
 ```
 
-Not yet run on a real machine. Review the first program and do a dry run before cutting.
+Ran on the machine with the default settings. Still review each program in the preview, and do
+an air test after changing machine values.

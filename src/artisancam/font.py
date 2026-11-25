@@ -83,15 +83,19 @@ def _segments(path: str, glyph: str) -> list[list[Point]]:
         pos += count
         return [float(t) for t in chunk]
 
+    def point() -> Point:
+        x, y = numbers(2)
+        return (x, y)
+
     while pos < len(tokens):
         command = tokens[pos]
         pos += 1
         if command == "M":
-            subpaths.append([tuple(numbers(2))])
+            subpaths.append([point()])
         elif not subpaths:
             raise FontError(f"Glyph {glyph!r}: path does not start with M")
         elif command == "L":
-            subpaths[-1].append(tuple(numbers(2)))
+            subpaths[-1].append(point())
         elif command == "A":
             rx, ry, rotation, large, sweep, x, y = numbers(7)
             if rx != ry or rotation != 0:
@@ -127,7 +131,7 @@ def parse_font(svg_text: str) -> Font:
         if char is None or len(char) != 1:
             continue  # ligatures and glyphs without a character are not needed
         glyphs[char] = tuple(_join(_segments(node.get("d", ""), char)))
-    return Font(glyphs=glyphs, cap_height=float(face.get("cap-height")))
+    return Font(glyphs=glyphs, cap_height=float(face.attrib["cap-height"]))
 
 
 @cache

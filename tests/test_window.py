@@ -159,3 +159,51 @@ def test_the_dropdown_never_changes_the_gcode(window):
     assert window.output.toPlainText() == before
     assert window.save_button.isEnabled()  # the program is still valid and saveable
     assert not window.preview.stale
+
+
+# --- settings button and live refresh ---------------------------------------------------------------------
+
+
+def test_settings_button_exists(window):
+    assert window.settings_button.text().startswith("Settings")
+
+
+def test_new_settings_redraw_the_preview_at_once(window, settings):
+    import dataclasses
+
+    longer = dataclasses.replace(settings, stock_length=settings.stock_length + 10)
+    window.apply_settings(longer)
+    assert window.settings is longer
+    assert window.preview.sceneRect().height() == pytest.approx(longer.stock_length + 6)  # 3 mm padding each side
+    assert window.status.text() == "Settings saved."
+
+
+def test_new_settings_make_a_shown_program_stale(window, settings):
+    import dataclasses
+
+    window.text_input.setText("HDMI")
+    window.create_button.click()
+    assert window.save_button.isEnabled()
+    window.apply_settings(dataclasses.replace(settings, depth=0.3))
+    assert not window.save_button.isEnabled()
+    assert window.preview.stale and window.preview.drawn_cut_moves > 0  # old program still visible, faded
+    assert "Create program" in window.status.text()
+    window.create_button.click()
+    assert "Z-0.300" in window.output.toPlainText()  # the new program uses the new depth
+
+
+def test_chosen_cutout_version_survives_a_settings_change(window, settings):
+    import dataclasses
+
+    window.cutout_select.setCurrentText("2xD")
+    window.apply_settings(dataclasses.replace(settings, depth=0.3))
+    assert window.cutout_select.currentText() == "2xD"
+    assert window.preview.cutout_version == "2xD"
+
+
+def test_settings_without_cutouts_leave_only_no_cutouts(window, settings):
+    import dataclasses
+
+    window.apply_settings(dataclasses.replace(settings, cutouts=()))
+    assert [window.cutout_select.itemText(i) for i in range(window.cutout_select.count())] == ["No cut-outs"]
+    assert window.preview.cutout_version is None and window.preview.drawn_cutouts == 0

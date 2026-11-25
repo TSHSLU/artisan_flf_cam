@@ -58,3 +58,7 @@ output/
 scratch/
 tmp/
 *.log
+
+# --- Settings dialog: backup and in-progress files ---
+config.toml.bak
+config.toml.tmp

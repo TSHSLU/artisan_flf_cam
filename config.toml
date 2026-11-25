@@ -17,12 +17,12 @@ space_width       = 380    # extra gap for each space character, same units
 edge_margin       = 1.0    # engraving must stay at least this far from every stock edge
 
 [text_top]
-height = 3.5      # capital-letter height
-margin = 4.0      # from the top edge down to the top of the capital letters
+height = 2.5      # capital-letter height
+margin = 2.5      # from the top edge down to the top of the capital letters
 
 [text_bottom]
-height = 3.5      # capital-letter height
-margin = 5.0      # from the bottom edge up to the baseline of the capital letters
+height = 2.5      # capital-letter height
+margin = 2.5      # from the bottom edge up to the baseline of the capital letters
 
 # Cut-outs: the holes in the cover (D hole, screw holes). They are cut by a separate Fusion
 # program; here they are only DRAWN in red on the preview so you can see where the engraving
@@ -36,9 +36,9 @@ margin = 5.0      # from the bottom edge up to the baseline of the capital lette
 #                     flat = distance from the centre to the flat (mm, less than the radius)
 #                     flat_side = "left" | "right" | "top" | "bottom"
 #
-# !! Versions 1xD and 2xD below use ASSUMED numbers. Only the D24 diameter and the screw hole x
-# !! positions (9 and 28) come from you. Check every value marked ASSUMED against your
-# !! Fusion cut-out program and correct it here.
+# !! Values marked ASSUMED are guesses. For 1xD only the D24 diameter and the screw hole x
+# !! positions (9 and 28) come from you; for 2xD everything except x was measured. Check
+# !! every ASSUMED value against a real cover and correct it here.
 
 [[cutout]]
 name     = "D hole"
@@ -66,29 +66,28 @@ x        = 28.0
 y        = 43.25      # ASSUMED: 12 mm below the centre of the D hole
 diameter = 3.2        
 
-# Version 2xD: two D holes above each other. !! ALL numbers below are ASSUMED (nothing about
-# !! this version was given except "two holes above each other"). Same D24 size as 1xD, centred
-# !! on the width, 28 mm apart. No screw holes are drawn. With these positions the lower hole
-# !! reaches y = 61, so a bottom text line would overlap it: 2xD covers probably carry only the
-# !! top text. Correct the numbers, and add screw holes if there are any.
+# Version 2xD: two holes of 23.5 mm above each other, measured on a real 2xD cover.
+# The centres were measured from the BOTTOM edge (18.05 and 44.05 mm); y here is measured
+# from the TOP, so y = 62.5 - measured. If [stock] length changes, these y values do not
+# follow automatically. Only x is assumed (centre of the width). No screw holes.
 
 [[cutout]]
-name     = "D hole upper"
+name     = "Hole upper"
 version  = "2xD"
 shape    = "d"
-x        = 18.5       # ASSUMED
-y        = 21.0       # ASSUMED
-diameter = 24.0       # ASSUMED (same as 1xD)
-# flat      = 10.5    # flat side not known yet: set both lines to draw it
+x        = 18.625     # ASSUMED: centre of the 37.25 mm width
+y        = 18.45      # measured: 44.05 mm from the bottom edge
+diameter = 23.5       # measured
+# flat      = 10.5    # flat side not known: set both lines to draw it
 # flat_side = "bottom"
 
 [[cutout]]
-name     = "D hole lower"
+name     = "Hole lower"
 version  = "2xD"
 shape    = "d"
-x        = 18.5       # ASSUMED
-y        = 49.0       # ASSUMED
-diameter = 24.0       # ASSUMED (same as 1xD)
+x        = 18.625     # ASSUMED: centre of the 37.25 mm width
+y        = 44.45      # measured: 18.05 mm from the bottom edge
+diameter = 23.5       # measured
 # flat      = 10.5
 # flat_side = "bottom"
 

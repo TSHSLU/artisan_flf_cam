@@ -6,11 +6,18 @@ fail with a message that names the key. A bad config must never turn into a bad 
 
 from __future__ import annotations
 
+import os
 import tomllib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+import tomlkit
+from tomlkit.exceptions import TOMLKitError
+
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parents[2] / "config.toml"
+# Known-good values ("factory defaults") that the Settings dialog can restore. Never written by the app.
+DEFAULTS_PATH = Path(__file__).resolve().parents[2] / "config.defaults.toml"
 
 # Sanity limit for the V-bit engraving depth: guards against a 0.2 -> 2 typo.
 MAX_DEPTH = 1.0
@@ -74,30 +81,48 @@ class Settings:
         return tuple(dict.fromkeys(c.version for c in self.cutouts))
 
 
-# (section, key) -> Settings field. This table is the whole file format, apart from [[cutout]].
-_FIELDS = {
-    ("stock", "width"): "stock_width",
-    ("stock", "length"): "stock_length",
-    ("text", "letter_gap"): "letter_gap",
-    ("text", "space_width"): "space_width",
-    ("text", "edge_margin"): "edge_margin",
-    ("text_top", "height"): "top_height",
-    ("text_top", "margin"): "top_margin",
-    ("text_bottom", "height"): "bottom_height",
-    ("text_bottom", "margin"): "bottom_margin",
-    ("engraving", "depth"): "depth",
-    ("heights", "clearance"): "clearance_z",
-    ("heights", "retract"): "retract_z",
-    ("heights", "feed"): "feed_z",
-    ("feeds", "cutting"): "cutting_feed",
-    ("feeds", "plunge"): "plunge_feed",
-    ("feeds", "retract"): "retract_feed",
-    ("spindle", "percent"): "spindle_percent",
-    ("spindle", "warmup_s"): "spindle_warmup_s",
-}
+@dataclass(frozen=True)
+class FieldSpec:
+    """One number in config.toml: where it lives, which Settings field it fills, and how the
+    Settings dialog shows it (label, unit, tab, decimals, upper limit of the input box)."""
 
-# Fields that may be zero; every other field must be > 0.
-_MAY_BE_ZERO = {"top_margin", "bottom_margin", "edge_margin", "spindle_warmup_s"}
+    section: str
+    key: str
+    field: str
+    label: str
+    unit: str
+    tab: str  # "layout" or "machine"
+    decimals: int
+    maximum: float
+    may_be_zero: bool = False
+
+
+# This table is the whole file format (apart from [[cutout]]) and also the content of the
+# Settings dialog, in this order. A new setting needs one line here and one field in Settings.
+FIELDS: tuple[FieldSpec, ...] = (
+    FieldSpec("stock", "width", "stock_width", "Cover width", "mm", "layout", 2, 1000),
+    FieldSpec("stock", "length", "stock_length", "Cover length", "mm", "layout", 2, 1000),
+    FieldSpec("text_top", "height", "top_height", "Top text: letter height", "mm", "layout", 2, 100),
+    FieldSpec("text_top", "margin", "top_margin", "Top text: distance from the top edge", "mm", "layout", 2, 1000, True),
+    FieldSpec("text_bottom", "height", "bottom_height", "Bottom text: letter height", "mm", "layout", 2, 100),
+    FieldSpec("text_bottom", "margin", "bottom_margin", "Bottom text: baseline above the bottom edge", "mm", "layout", 2, 1000, True),
+    FieldSpec("text", "letter_gap", "letter_gap", "Gap between letters", "font units", "layout", 0, 5000),
+    FieldSpec("text", "space_width", "space_width", "Extra width of a space", "font units", "layout", 0, 5000),
+    FieldSpec("text", "edge_margin", "edge_margin", "Minimum distance to the edges", "mm", "layout", 2, 100, True),
+    FieldSpec("engraving", "depth", "depth", "Engraving depth", "mm", "machine", 3, MAX_DEPTH),
+    FieldSpec("heights", "clearance", "clearance_z", "Clearance height (start and end)", "mm", "machine", 2, 100),
+    FieldSpec("heights", "retract", "retract_z", "Retract height (between strokes)", "mm", "machine", 2, 100),
+    FieldSpec("heights", "feed", "feed_z", "Feed height (plunge starts here)", "mm", "machine", 2, 100),
+    FieldSpec("feeds", "cutting", "cutting_feed", "Cutting feed", "mm/min", "machine", 1, 20000),
+    FieldSpec("feeds", "plunge", "plunge_feed", "Plunge feed", "mm/min", "machine", 1, 20000),
+    FieldSpec("feeds", "retract", "retract_feed", "Retract feed", "mm/min", "machine", 1, 20000),
+    FieldSpec("spindle", "percent", "spindle_percent", "Spindle power", "%", "machine", 0, 100),
+    FieldSpec("spindle", "warmup_s", "spindle_warmup_s", "Spindle warm-up", "s", "machine", 1, 60, True),
+)
+
+# (section, key) -> Settings field, and the fields that may be zero (every other one must be > 0).
+_FIELDS = {(f.section, f.key): f.field for f in FIELDS}
+_MAY_BE_ZERO = {f.field for f in FIELDS if f.may_be_zero}
 
 # Keys of one [[cutout]] entry: required numbers per shape, and optional ones.
 _CUTOUT_KEYS = {"rect": ("x", "y", "width", "height"), "circle": ("x", "y", "diameter"), "d": ("x", "y", "diameter")}
@@ -146,24 +171,25 @@ def _parse_cutout(entry: object, index: int) -> Cutout:
     for key in entry:
         if key not in allowed:
             raise ConfigError(f"{where}: unknown key {key} for a {shape}")
-    values: dict[str, float | str] = {}
+    numbers: dict[str, float] = {}  # x, y, width, height, diameter: always numbers
     for key in _CUTOUT_KEYS[shape]:
         if key not in entry:
             raise ConfigError(f"{where}: missing key {key}")
         value = _number(entry[key], f"{where} {key}")
         if key in _CUTOUT_POSITIVE and value <= 0:
             raise ConfigError(f"{where} {key} must be > 0, got {value:g}")
-        values[key] = value
+        numbers[key] = value
+    flat, flat_side = 0.0, ""  # the flat side of a D is optional
     if shape == "d" and ("flat" in entry or "flat_side" in entry):
         if "flat" not in entry or "flat_side" not in entry:
             raise ConfigError(f"{where}: flat and flat_side belong together; give both or neither")
         flat = _number(entry["flat"], f"{where} flat")
-        if not 0 < flat < (values["diameter"] / 2):
-            raise ConfigError(f"{where}: flat must be between 0 and the radius ({values['diameter'] / 2:g} mm), got {flat:g}")
+        if not 0 < flat < numbers["diameter"] / 2:
+            raise ConfigError(f"{where}: flat must be between 0 and the radius ({numbers['diameter'] / 2:g} mm), got {flat:g}")
         if entry["flat_side"] not in _FLAT_SIDES:
             raise ConfigError(f"{where}: flat_side must be one of {', '.join(_FLAT_SIDES)}, got {entry['flat_side']!r}")
-        values["flat"], values["flat_side"] = flat, entry["flat_side"]
-    return Cutout(name=name.strip(), version=version.strip(), shape=shape, **values)
+        flat_side = str(entry["flat_side"])
+    return Cutout(name=name.strip(), version=version.strip(), shape=shape, flat=flat, flat_side=flat_side, **numbers)
 
 
 def parse_settings(raw: dict) -> Settings:
@@ -200,3 +226,56 @@ def parse_settings(raw: dict) -> Settings:
     if 2 * s.edge_margin >= min(s.stock_width, s.stock_length):
         raise ConfigError("[text] edge_margin is larger than the stock allows")
     return s
+
+
+def values_of(settings: Settings) -> dict[str, float]:
+    """The numbers the Settings dialog edits, as {Settings field name: value}."""
+    return {f.field: getattr(settings, f.field) for f in FIELDS}
+
+
+def load_defaults(path: Path | str | None = None) -> Settings:
+    """The known-good settings from config.defaults.toml (only read, never written)."""
+    return load_settings(path or DEFAULTS_PATH)
+
+
+def save_settings(values: Mapping[str, float], path: Path | str | None = None) -> Settings:
+    """Write `values` ({Settings field name: number}) into the config file and return the new Settings.
+
+    Only those numbers change: comments, layout and the [[cutout]] blocks stay exactly as they were.
+    The new content is validated with parse_settings BEFORE anything is written, so an invalid value
+    raises ConfigError and leaves the file untouched. The previous file is kept as <name>.bak, and the
+    new text goes to a temporary file that then replaces the original in one step.
+    """
+    path = Path(path) if path else DEFAULT_CONFIG_PATH
+    unknown = set(values) - {f.field for f in FIELDS}
+    if unknown:
+        raise ValueError(f"Not a settings field: {', '.join(sorted(unknown))}")
+    try:
+        old_text = path.read_bytes().decode("utf-8")  # bytes keep the file's own line endings
+    except FileNotFoundError:
+        raise ConfigError(f"Config file not found: {path}") from None
+    try:
+        doc = tomlkit.parse(old_text)
+    except TOMLKitError as exc:
+        raise ConfigError(f"Config file {path} is not valid TOML: {exc}") from None
+
+    for spec in FIELDS:
+        if spec.field not in values:
+            continue
+        if spec.section not in doc:
+            raise ConfigError(f"Config file has no [{spec.section}] section")
+        table = doc[spec.section]
+        old = table.get(spec.key)  # type: ignore[union-attr]
+        value = float(values[spec.field])
+        # Keep whole numbers that were written without a decimal point (1600, not 1600.0).
+        keep_int = isinstance(old, int) and not isinstance(old, bool) and value.is_integer()
+        table[spec.key] = int(value) if keep_int else value  # type: ignore[index]
+
+    new_text = tomlkit.dumps(doc)
+    settings = parse_settings(tomllib.loads(new_text))  # raises ConfigError; nothing written yet
+    if new_text != old_text:
+        path.with_name(path.name + ".bak").write_bytes(old_text.encode("utf-8"))
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_bytes(new_text.encode("utf-8"))
+        os.replace(temporary, path)
+    return settings
