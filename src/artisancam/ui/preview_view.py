@@ -19,8 +19,8 @@ from ..preview import ParsedProgram, d_outline, parse_gcode
 CUT_COLOR = QColor("#0b8a4a")
 TRAVEL_COLOR = QColor("#9aa4ad")
 CUTOUT_COLOR = QColor("#d64545")
-ORIGIN_COLOR = QColor("#d64545")
 START_COLOR = QColor("#2563eb")
+REFERENCE_SIZE_PX = 16  # diameter of the reference-point symbol on screen, whatever the zoom
 _PADDING = 3.0  # mm of empty space around the stock in the view
 _STALE_OPACITY = 0.25
 
@@ -31,6 +31,37 @@ def _pen(color: QColor, width: float, dashed: bool = False) -> QPen:
     if dashed:
         pen.setStyle(Qt.PenStyle.DashLine)
     return pen
+
+
+class ReferenceMarker(QGraphicsItem):
+    """The quartered black-and-white circle that marks the reference point (where X0 Y0 is set).
+
+    It is centred on its position and always drawn REFERENCE_SIZE_PX pixels wide: the flag
+    ItemIgnoresTransformations keeps it the same size when the view zooms.
+    """
+
+    def __init__(self, diameter_px: float = REFERENCE_SIZE_PX) -> None:
+        super().__init__()
+        self._radius = diameter_px / 2
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations)
+
+    def boundingRect(self) -> QRectF:  # noqa: N802 (Qt naming): the area Qt repaints for this item
+        r = self._radius + 1  # +1 pixel for the outline
+        return QRectF(-r, -r, 2 * r, 2 * r)
+
+    def paint(self, painter: QPainter, option, widget=None) -> None:  # noqa: ARG002
+        r = self._radius
+        circle = QRectF(-r, -r, 2 * r, 2 * r)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("white"))
+        painter.drawEllipse(circle)
+        # drawPie angles are in 1/16 of a degree; 0 is "3 o'clock", positive turns counter-clockwise.
+        painter.setBrush(QColor("black"))
+        painter.drawPie(circle, 0 * 16, 90 * 16)  # top-right quarter
+        painter.drawPie(circle, 180 * 16, 90 * 16)  # bottom-left quarter
+        painter.setPen(QPen(QColor("black"), 1.2))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(circle)  # outline on top
 
 
 class PreviewView(QGraphicsView):
@@ -71,10 +102,13 @@ class PreviewView(QGraphicsView):
         self._scene.setSceneRect(self._stock.adjusted(-_PADDING, -_PADDING, _PADDING, _PADDING))
         stock = self._scene.addRect(self._stock, _pen(QColor("#6b7782"), 1.2), QBrush(QColor("#ffffff")))
         stock.setZValue(0)
-        origin = self._scene.addEllipse(-0.6, -0.6, 1.2, 1.2, _pen(ORIGIN_COLOR, 1.5), QBrush(QColor(255, 255, 255)))
-        origin.setZValue(5)
-        origin.setToolTip("Origin (X0 Y0): top-left corner of the stock")
-        self._stock_items = [stock, origin]
+        self.reference_marker = ReferenceMarker()  # placed at scene (0, 0): the cover's top-left corner
+        self.reference_marker.setZValue(5)
+        self.reference_marker.setToolTip(
+            "Reference point: set X0 Y0 here (top-left corner of the cover) and Z0 on the cover's top face"
+        )
+        self._scene.addItem(self.reference_marker)
+        self._stock_items = [stock, self.reference_marker]
         version = self._cutout_version
         if version is not None and version not in settings.cutout_versions:
             version = settings.cutout_versions[0] if settings.cutout_versions else None

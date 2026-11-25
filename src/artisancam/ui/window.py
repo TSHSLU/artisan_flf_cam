@@ -62,8 +62,8 @@ class MainWindow(QWidget):
         self.cutout_select.addItems(settings.cutout_versions)
         self.cutout_select.addItem("No cut-outs")
         self.cutout_select.setToolTip("Draws the holes of this cover version in red on the preview. The G-code is not affected.")
-        legend = QLabel("Green: engraving · dashed grey: travel · red: cut-outs (drawn only, cut separately) · "
-                        "wheel zooms, drag pans, double-click fits")
+        legend = QLabel("Black-white circle: reference point, set X0 Y0 here (Z0 = cover top) · green: engraving · "
+                        "dashed grey: travel · red: cut-outs (drawn only) · wheel zooms, drag pans, double-click fits")
         legend.setWordWrap(True)
         legend.setStyleSheet("color: #5b6670; font-size: 11px;")
 

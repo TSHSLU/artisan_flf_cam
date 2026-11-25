@@ -159,7 +159,9 @@ def _green_pixels(image):
 
 def test_picture_is_not_mirrored_left_to_right(view, settings):
     # "L" is a vertical stem with a foot pointing right at the bottom. Mirrored, the foot would point left.
-    view.show_program(create_program("L", settings))
+    # Fixed letter size, so the pixel distances below do not depend on the values tuned in config.toml.
+    fixed = dataclasses.replace(settings, top_height=3.5, top_margin=4.0)
+    view.show_program(create_program("L", fixed))
     pixels = _green_pixels(_render(view))
     ys = [y for _, y in pixels]
     top, bottom = min(ys), max(ys)
@@ -246,22 +248,64 @@ def test_d_outline_rejects_an_unknown_side():
         d_outline(0, 0, 24, 6, "middle")
 
 
-def _darkest(image):
+def _darkest(image, from_row=40):
+    # Rows above 40 px hold the black reference-point symbol at the origin; it never fades, so skip them.
     return min(
         image.pixelColor(x, y).red() + image.pixelColor(x, y).green() + image.pixelColor(x, y).blue()
-        for y in range(image.height()) for x in range(image.width())
+        for y in range(from_row, image.height()) for x in range(image.width())
     )
 
 
 def test_stale_fades_the_toolpath_and_a_new_program_restores_it(view, settings):
-    view.show_program(create_program("HDMI", settings))
+    fixed = dataclasses.replace(settings, top_height=3.5, top_margin=4.0)  # text below row 40, any config
+    view.show_program(create_program("HDMI", fixed))
     normal = _darkest(_render(view))
     view.set_stale(True)
     assert view.stale
     assert _darkest(_render(view)) > normal + 60  # visibly lighter
-    view.show_program(create_program("HDMI", settings))
+    view.show_program(create_program("HDMI", fixed))
     assert not view.stale
     assert _darkest(_render(view)) == normal
+
+
+# --- the reference-point symbol ----------------------------------------------------------------------
+
+
+def _dark(c):
+    return c.red() + c.green() + c.blue() < 200
+
+
+def test_reference_point_sits_on_the_cover_corner(view):
+    from PySide6.QtWidgets import QGraphicsItem
+
+    marker = view.reference_marker
+    assert marker.scene() is view.scene()
+    assert (marker.pos().x(), marker.pos().y()) == (0, 0)  # scene (0, 0) = top-left corner = G-code X0 Y0
+    assert marker.flags() & QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations
+    assert "X0 Y0" in marker.toolTip()
+
+
+def test_reference_point_is_quartered_black_and_white(view):
+    image = _render(view)
+    cx = cy = round(3 * 346 / 43.25)  # the corner is 3 mm (padding) from the image edge: 24 px
+    assert _dark(image.pixelColor(cx + 4, cy - 4))  # top-right: black
+    assert _dark(image.pixelColor(cx - 4, cy + 4))  # bottom-left: black
+    assert not _dark(image.pixelColor(cx - 4, cy - 4))  # top-left: white
+    assert not _dark(image.pixelColor(cx + 4, cy + 4))  # bottom-right: white
+
+
+def test_reference_point_keeps_its_size_when_zooming(view):
+    view.scale(4, 4)
+    on_screen = view.reference_marker.deviceTransform(view.viewportTransform())
+    assert on_screen.m11() == pytest.approx(1.0)  # not scaled with the view
+
+
+def test_reference_point_is_drawn_once_after_new_settings(view, settings):
+    from artisancam.ui.preview_view import ReferenceMarker
+
+    view.set_settings(dataclasses.replace(settings, stock_length=70))
+    markers = [i for i in view.scene().items() if isinstance(i, ReferenceMarker)]
+    assert markers == [view.reference_marker]
 
 
 def test_fit_resets_a_manual_zoom(view):

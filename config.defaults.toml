@@ -1,7 +1,8 @@
-# FACTORY DEFAULTS - known-good values, saved on 2026-11-25 from the config that ran
-# successfully on the machine. The Settings dialog's "Restore defaults" button reads the
-# numbers from here. The app never writes this file; do not edit it unless you want to
-# change what "Restore defaults" restores. Your working settings live in config.toml.
+# FACTORY DEFAULTS - known-good values. First saved on 2026-11-25 from the config that ran
+# successfully on the machine; updated the same day to 2.5 mm text (top and bottom, 2.5 mm
+# from the edges) so the text clears the 2xD holes. The Settings dialog's "Restore defaults"
+# button reads the numbers from here. The app never writes this file; do not edit it unless
+# you want to change what "Restore defaults" restores. Your working settings live in config.toml.
 #
 # ArtisanCAM configuration. All lengths in millimetres, feeds in mm/min.
 #
@@ -22,12 +23,12 @@ space_width       = 380    # extra gap for each space character, same units
 edge_margin       = 1.0    # engraving must stay at least this far from every stock edge
 
 [text_top]
-height = 3.5      # capital-letter height
-margin = 4.0      # from the top edge down to the top of the capital letters
+height = 2.5      # capital-letter height
+margin = 2.5      # from the top edge down to the top of the capital letters
 
 [text_bottom]
-height = 3.5      # capital-letter height
-margin = 5.0      # from the bottom edge up to the baseline of the capital letters
+height = 2.5      # capital-letter height
+margin = 2.5      # from the bottom edge up to the baseline of the capital letters
 
 # Cut-outs: the holes in the cover (D hole, screw holes). They are cut by a separate Fusion
 # program; here they are only DRAWN in red on the preview so you can see where the engraving
